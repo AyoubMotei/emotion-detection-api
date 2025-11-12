@@ -1,0 +1,13 @@
+numpy 
+pandas 
+matplotlib 
+scikit-learn
+tensorflow 
+opencv-python-headless 
+fastapi 
+uvicorn 
+python-multipart 
+sqlalchemy 
+psycopg2-binary 
+jupyter
+
