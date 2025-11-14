@@ -44,31 +44,35 @@ jobs:
     # -------------------------------------------------------------------------
     steps:
       - name: 1. Cloner le repository
+        # Récupère le code de votre projet sur la machine de la CI
         uses: actions/checkout@v4
 
       - name: 2. Configurer Python 3.10
         uses: actions/setup-python@v4
         with:
+          # Utilise une version de Python stable et largement supportée
           python-version: "3.10"
 
       - name: 3. Installer le client PostgreSQL (psql)
+        # Nécessaire pour l'étape d'attente de connexion à la DB
         run: |
           sudo apt-get update -y
           sudo apt-get install -y postgresql-client
 
-      - name: 4. Installer les dépendances Python (CORRIGÉ : Ajout de pytest-cov)
+      - name: 4. Installer les dépendances Python (Ajout de pytest-cov)
         run: |
           python -m pip install --upgrade pip
-          # Installation des packages listés dans requirement.txt (ou requirements.txt)
+          # Installation des packages de base
           if [ -f "requirement.txt" ]; then
             pip install -r requirement.txt
           elif [ -f "requirements.txt" ]; then
             pip install -r requirements.txt
           fi
-          # AJOUT DE PYTEST-COV ici pour que l'option --cov soit reconnue
+          # Ajout de 'pytest-cov' pour que l'option --cov soit reconnue lors des tests
           pip install pytest httpx python-dotenv pytest-cov
 
       - name: 5. Configurer PYTHONPATH
+        # Ajoute les dossiers racine et 'src' au chemin d'importation de Python
         run: |
           echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
 
@@ -81,6 +85,7 @@ jobs:
           echo "Postgres est prêt."
 
       - name: 7. Exporter les variables d'environnement de la DB
+        # Définit les variables utilisées par src/database.py
         run: |
           echo "user=test_user" >> $GITHUB_ENV
           echo "password=test_password" >> $GITHUB_ENV
@@ -91,21 +96,24 @@ jobs:
 
 
       - name: 8. Préparer les Artifacts Machine Learning
-        # Télécharge le fichier nécessaire au module 'detect_and_predict.py' (Haar Cascade)
-        # et crée un fichier .h5 factice pour que le code puisse s'importer sans erreur.
+        # Télécharge la cascade et crée un fichier .h5 factice pour l'import
         run: |
           mkdir -p models 
+          # Télécharge le fichier Haar Cascade
           wget -q -O haarcascade_frontalface_default.xml \
             https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml || true
+          # Crée un fichier factice pour le modèle (si non présent dans le repo)
           if [ ! -f "models/emotion_model.h5" ]; then
             touch models/emotion_model.h5
           fi
 
       - name: 9. Créer les Tables de la Base de Données (SQLAlchemy)
+        # Exécute la logique de création des tables avant les tests.
         run: |
           python -c "from src.main import Base, engin; Base.metadata.create_all(bind=engin); print('Tables créées.')"
 
 
       - name: 10. Lancer les Tests Unitaires
+        # Exécute Pytest avec la couverture de code.
         run: |
           python -m pytest -v --cov=src
