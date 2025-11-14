@@ -1,56 +1,65 @@
-name: Tests Unitaires Simples (FastAPI + ML)
+name: CI - Tests Unitaires Simples (FastAPI + ML)
 
+# Déclencheurs : s'exécute sur push et pull_request des branches master ou main
 on:
-  
   push:
-  
-    branches: [ "master" ]
-
+    branches: ["master", "main"]
   pull_request:
-    branches: [ "master" ]
-
+    branches: ["master", "main"]
 
 jobs:
   test:
-    
+    # OS utilisé pour le job
     runs-on: ubuntu-latest
 
+    # Variables d'environnement accessibles dans toutes les étapes
+    env:
+      # On force une DB sqlite pour éviter d'avoir besoin d'un Postgres en CI.
+      DATABASE_URL: "sqlite:///./test_db.sqlite3"
+
     steps:
+      #  Récupère le code du dépôt
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      
-      - name: Installer Python 3.13
-        uses: actions/setup-python@v5
+      #  Prépare Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.13' 
+        
+          python-version: "3.13"
 
-      
+      #  Installe les dépendances
       - name: Install dependencies
         run: |
-          # Mise à jour de pip
+          # Met à jour pip
           python -m pip install --upgrade pip
-          # Installation des librairies de production (à partir de requirement.txt)
-          pip install -r requirement.txt
-          # Installation de pytest pour l'exécution des tests
-          pip install pytest
 
-      #  Préparer les fichiers de Machine Learning (CV)
-      
-      - name: Préparer l'environnement (models & test images)
+          # Installer les dépendances du projet
+          pip install -r requirements.txt
+       
+          # Installer httpx pour les tests FastAPI
+          pip install httpx
+
+      # Prépare quelques fichiers locaux nécessaires aux tests
+      - name: Préparer fichiers locaux (models / cascades / images)
         run: |
-          # Crée les dossiers si besoin (pour 'models/' et 'tests/test_images/')
           mkdir -p models tests/test_images
-          
-          # Télécharge le fichier requis par OpenCV pour la détection de visage
+          # Télécharger le modèle CNN si pas déjà présent
+          if [ ! -f "models/emotion_model.h5" ]; then
+            wget -q -O models/emotion_model.h5 \
+          # Télécharger le haarcascade si pas déjà présent 
           if [ ! -f "haarcascade_frontalface_default.xml" ]; then
-            wget https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml
+            wget -q -O haarcascade_frontalface_default.xml \
+              https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml || true
           fi
 
-      #  Exécuter les tests (Pytest)
-      - name: Exécuter Pytest
+      # Définir PYTHONPATH pour trouver ton dossier src
+      - name: Configure le chemin d'importation pour trouver le dossier 'src'
         run: |
-          # Configure le chemin d'importation pour trouver le dossier 'src'
-          export PYTHONPATH="$PYTHONPATH:$(pwd):$(pwd)/src"
-          # Exécute tous les tests trouvés dans le dossier 'tests/'
+          echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
+
+      #  Lancer les tests avec pytest
+      - name: Run tests
+        run: |
           python -m pytest -v
