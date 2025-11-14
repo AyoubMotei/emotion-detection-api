@@ -1,60 +1,37 @@
-name: Tests Unitaires Simples (FastAPI + ML)
-
-on:
-  
-  push:
-  
-    branches: [ "main" ]
-
-  pull_request:
-    branches: [ "main" ]
-
-
 jobs:
   test:
-    
     runs-on: ubuntu-latest
 
+    env:
+      # FORCE une DB sqlite pour la CI
+      DATABASE_URL: "sqlite:///./test_db.sqlite3"
+      # S'assurer que les composants individuels ne contiennent pas la chaîne "None"
+      DB_USER: ""
+      DB_PASSWORD: ""
+      DB_HOST: ""
+      DB_PORT: ""
+      DB_NAME: ""
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-            
-            fetch-depth: 0 
 
-      
-      - name: Installer Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-          cache: 'pip' 
+      # ... tes étapes d'installation ...
 
-      
-      - name: Installer les dépendances
+      - name: Configure le chemin d'importation pour trouver le dossier 'src'
         run: |
-          # Mise à jour de pip
-          python -m pip install --upgrade pip
-          # Installation des librairies de production (à partir de requirement.txt)
-          pip install -r requirement.txt
-          # Installation de pytest pour l'exécution des tests
-          pip install pytest
+          echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
 
-      #  Préparer les fichiers de Machine Learning (CV)
-      
-      - name: Télécharger le classifieur Haar Cascade
+      # Debug optionnel: afficher la valeur effective de DATABASE_URL (utile pour debug)
+      - name: Debug: show DATABASE_URL
         run: |
-          # Crée les dossiers si besoin (pour 'models/' et 'tests/test_images/')
-          mkdir -p models tests/test_images
-          
-          # Télécharge le fichier requis par OpenCV pour la détection de visage
-          if [ ! -f "haarcascade_frontalface_default.xml" ]; then
-            wget https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml
-          fi
+          echo "DATABASE_URL='$DATABASE_URL'"
+          python -c "import os; print('PYTHONURL_FROM_PY:', os.getenv('DATABASE_URL'))"
 
-      #  Exécuter les tests (Pytest)
-      - name: Exécuter Pytest
+      - name: Run tests
         run: |
-          # Configure le chemin d'importation pour trouver le dossier 'src'
-          export PYTHONPATH="$PYTHONPATH:$(pwd):$(pwd)/src"
-          # Exécute tous les tests trouvés dans le dossier 'tests/'
+          # Réexporter explicitement pour être absolument certain que pytest le voit
+          echo "DATABASE_URL=sqlite:///./test_db.sqlite3" >> $GITHUB_ENV
+          # (optionnel) vérifier que la variable est bien définie juste avant d'exécuter pytest
+          echo "After export, DATABASE_URL='$DATABASE_URL'"
           python -m pytest -v

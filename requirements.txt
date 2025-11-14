@@ -11,4 +11,5 @@ sqlalchemy
 psycopg2-binary 
 dotenv
 pytest
+httpx
 
