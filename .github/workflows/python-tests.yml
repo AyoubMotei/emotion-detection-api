@@ -1,24 +1,37 @@
-name: CI - Tests Unitaires Simples (FastAPI + ML)
+name: CI - Tests Unitaires (adapté à .env)
 
-# Déclencheurs
 on:
   push:
-    branches: ["master", "main"]
+    branches: ["main", "master", "develop"]
   pull_request:
-    branches: ["master", "main"]
+    branches: ["main", "master", "develop"]
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
-    # Env global du job : on force sqlite et on neutralise les variables individuelles
+    # valeurs par défaut vides pour éviter des 'None' littéraux
     env:
-      DATABASE_URL: "sqlite:///./test_db.sqlite3"
-      DB_USER: ""
-      DB_PASSWORD: ""
-      DB_HOST: ""
-      DB_PORT: ""
-      DB_NAME: ""
+      user: ""
+      password: ""
+      host: ""
+      port: ""
+      database: ""
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: "test_password"
+          POSTGRES_DB: emotions_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test_user -d emotions_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
       - name: Checkout repository
@@ -27,12 +40,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.13"
+          python-version: "3.11"
 
-      - name: Show Python and pip versions
+      - name: Install PostgreSQL client (psql) - used to wait for DB
         run: |
-          python --version
-          pip --version
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client
 
       - name: Install dependencies
         run: |
@@ -43,38 +56,55 @@ jobs:
           elif [ -f "requirements.txt" ]; then
             pip install -r requirements.txt
           else
-            echo "Aucun fichier requirements trouvé, installation minimale"
+            echo "Aucun requirements trouvé, installation minimale"
           fi
           # httpx requis par fastapi TestClient
           pip install httpx
 
+      - name: Wait for Postgres to be ready
+        run: |
+          until psql "postgresql://test_user:test_password@localhost:5432/emotions_db" -c '\q'; do
+            echo "Postgres unavailable - sleeping 1s"
+            sleep 1
+          done
+          echo "Postgres is up"
+
+      - name: Export DB envs with the same names as your .env
+        run: |
+          # These variables match the names in your .env file:
+          # user, password, host, port, database
+          echo "user=test_user" >> $GITHUB_ENV
+          echo "password=test_password" >> $GITHUB_ENV
+          echo "host=localhost" >> $GITHUB_ENV
+          echo "port=5432" >> $GITHUB_ENV
+          echo "database=emotions_db" >> $GITHUB_ENV
+
+          # Also export a clean DATABASE_URL so SQLAlchemy/create_engine uses it directly.
+          echo "DATABASE_URL=postgresql://test_user:test_password@localhost:5432/emotions_db" >> $GITHUB_ENV
+
       - name: Préparer fichiers locaux (models / cascades / images)
         run: |
           mkdir -p models tests/test_images
-          echo "Si vous voulez un modèle pour les tests, ajoutez 'models/emotion_model.h5' au dépôt ou aux artefacts."
-          # télécharger le haarcascade si nécessaire (utile pour OpenCV)
+          echo "Si vous voulez un modèle (.h5), ajoutez-le dans models/ ou utilisez un artefact."
           if [ ! -f "haarcascade_frontalface_default.xml" ]; then
             wget -q -O haarcascade_frontalface_default.xml \
               https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml || true
           fi
 
-      - name: Configure le chemin d'importation pour trouver le dossier 'src'
+      - name: Configure PYTHONPATH pour importer 'src'
         run: |
           echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
           python -c "import sys; print('PYTHONPATH preview:', sys.path[:3])"
 
-      - name: Debug: show DATABASE_URL (value available to shell)
+      - name: Debug: afficher les variables importantes (logs)
         run: |
-          echo "DATABASE_URL (shell) = '$DATABASE_URL'"
+          echo "Shell: user='$user' password='$password' host='$host' port='$port' database='$database'"
           python - <<'PY'
 import os
-print("DATABASE_URL (python) =", os.getenv("DATABASE_URL"))
+print("Python: user =", os.getenv("user"))
+print("Python: DATABASE_URL =", os.getenv("DATABASE_URL"))
 PY
 
       - name: Run tests
         run: |
-          # filet de sécurité : réexport explicite pour s'assurer que pytest voit bien la variable
-          echo "DATABASE_URL=sqlite:///./test_db.sqlite3" >> $GITHUB_ENV
-          # vérification rapide après réexport (sera affichée dans les logs)
-          echo "After export, DATABASE_URL (shell) = '$DATABASE_URL'"
           python -m pytest -v
