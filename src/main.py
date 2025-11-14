@@ -1,8 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from tensorflow.keras.models import load_model # Nécessaire pour charger le modèle CNN
-import cv2 # Nécessaire pour le traitement d'image et Haar Cascade
-import numpy as np # Nécessaire pour manipuler les tableaux d'images
+from tensorflow.keras.models import load_model 
+import cv2 
+import numpy as np 
 from typing import List
 import os
 
