@@ -20,10 +20,9 @@ jobs:
     # Nom du système d'exploitation où le job va s'exécuter
     runs-on: ubuntu-latest
 
-    # -------------------------------------------------------------------------
-    # 2.1. Services: Démarrage de la base de données PostgreSQL
-    # -------------------------------------------------------------------------
-    # Nécessaire car votre application utilise SQLAlchemy pour se connecter à une DB
+    # --- Configuration du service PostgreSQL (via Docker géré par GH Actions) ---
+    # Cette section démarre une base de données temporaire pour que les tests SQLAlchemy
+    # de votre application FastAPI puissent se connecter et créer des tables.
     services:
       postgres:
         image: postgres:16 # Utiliser l'image Docker officielle de Postgres
@@ -33,10 +32,9 @@ jobs:
           POSTGRES_PASSWORD: "test_password"
           POSTGRES_DB: emotions_db
         ports:
-          # Mappe le port 5432 du conteneur au port 5432 de l'hôte (nécessaire pour la connexion)
+          # Mappe le port 5432 du conteneur au port 5432 de l'hôte
           - 5432:5432
         options: >-
-          # Health Check: Attendre que la base de données soit prête à accepter des connexions
           --health-cmd="pg_isready -U test_user -d emotions_db"
           --health-interval=10s
           --health-timeout=5s
@@ -47,17 +45,17 @@ jobs:
     # -------------------------------------------------------------------------
     steps:
       - name: 1. Cloner le repository
-        # Récupère le code du projet sur la machine de la CI
+        # Récupère le code de votre projet sur la machine de la CI
         uses: actions/checkout@v4
 
-      - name: 2. Configurer Python (Version Stables)
+      - name: 2. Configurer Python 3.10
         uses: actions/setup-python@v4
         with:
-          # Utilise une version de Python stable et largement supportée (3.10)
+          # Utilise une version de Python stable et largement supportée
           python-version: "3.10"
 
       - name: 3. Installer le client PostgreSQL (psql)
-        # Nécessaire pour l'étape d'attente de connexion à la DB
+        # Nécessaire pour l'étape d'attente de connexion à la DB et le débogage éventuel
         run: |
           sudo apt-get update -y
           sudo apt-get install -y postgresql-client
@@ -65,25 +63,23 @@ jobs:
       - name: 4. Installer les dépendances Python
         run: |
           python -m pip install --upgrade pip
-          # Installation des packages listés dans requirements.txt ou requirement.txt
+          # Installation des packages listés dans requirement.txt (ou requirements.txt)
           if [ -f "requirement.txt" ]; then
             pip install -r requirement.txt
           elif [ -f "requirements.txt" ]; then
             pip install -r requirements.txt
           fi
-          # Ajout des outils nécessaires aux tests, même s'ils sont dans le requirements
+          # Ajout des outils nécessaires aux tests (pytest, httpx pour les requêtes)
           pip install pytest httpx python-dotenv
 
       - name: 5. Configurer PYTHONPATH
-        # Ajoute les dossiers racine et 'src' au chemin d'importation de Python.
-        # Cela permet à pytest d'importer vos modules (ex: from src.main import app).
+        # Ajoute les dossiers racine et 'src' au chemin d'importation de Python
+        # Cela permet à Pytest d'importer correctement vos modules (ex: from src.main import app)
         run: |
           echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
-          echo "PYTHONPATH set for imports."
 
-      - name: 6. Attendre que Postgres soit prêt (méthode de secours)
-        # La méthode `services.options` est plus rapide, mais cette vérification `psql`
-        # est une garantie que la base de données est VRAIMENT accessible par le réseau local.
+      - name: 6. Attendre que Postgres soit prêt (Vérification de connexion)
+        # Cette boucle essaie de se connecter à la DB de test jusqu'à ce qu'elle soit opérationnelle.
         run: |
           until psql "postgresql://test_user:test_password@localhost:5432/emotions_db" -c '\q'; do
             echo "Postgres inaccessible - attente 1s"
@@ -92,41 +88,35 @@ jobs:
           echo "Postgres est prêt."
 
       - name: 7. Exporter les variables d'environnement de la DB
-        # Configure les variables que votre fichier `src/database.py` (os.getenv) attend.
-        # Elles permettent à l'application de se connecter à la DB de test.
+        # Définit les variables d'environnement que votre fichier `src/database.py` utilise.
         run: |
           echo "user=test_user" >> $GITHUB_ENV
           echo "password=test_password" >> $GITHUB_ENV
           echo "host=localhost" >> $GITHUB_ENV
           echo "port=5432" >> $GITHUB_ENV
           echo "database=emotions_db" >> $GITHUB_ENV
-          # Exporter aussi l'URL complète si votre code l'utilise (bonne pratique)
           echo "DATABASE_URL=postgresql://test_user:test_password@localhost:5432/emotions_db" >> $GITHUB_ENV
 
 
       - name: 8. Préparer les Artifacts Machine Learning
-        # Télécharge le fichier Haar Cascade et crée un modèle factice (.h5).
-        # C'est nécessaire car `src/detect_and_predict.py` exige que ces fichiers existent.
+        # Télécharge le fichier nécessaire au module 'detect_and_predict.py' (Haar Cascade)
+        # et crée un fichier .h5 factice pour que le code puisse s'importer sans erreur.
         run: |
           mkdir -p models 
-          echo "Téléchargement du Haar Cascade..."
           wget -q -O haarcascade_frontalface_default.xml \
-            https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml || true
-          # Crée un fichier .h5 vide pour empêcher l'erreur `exit()` lors de l'importation de 'detect_and_predict.py'
+            https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascades/haarcascade_frontalface_default.xml || true
           if [ ! -f "models/emotion_model.h5" ]; then
-            echo "Création d'un modèle .h5 factice."
             touch models/emotion_model.h5
           fi
 
-      - name: 9. Créer les Tables de la Base de Données
-        # Exécute la fonction de création de tables de SQLAlchemy.
-        # L'importation de `src.main` initialise la base de données et crée les tables.
+      - name: 9. Créer les Tables de la Base de Données (SQLAlchemy)
+        # Exécute la logique de création des tables de votre application.
+        # Utilise le code Python pour s'assurer que la base de données est initialisée avant les tests.
         run: |
-          # Utilise le PYTHONPATH configuré à l'étape 5.
           python -c "from src.main import Base, engin; Base.metadata.create_all(bind=engin); print('Tables créées.')"
 
 
       - name: 10. Lancer les Tests Unitaires
-        # Exécute tous les fichiers de test trouvés par Pytest et calcule la couverture de code.
+        # Exécute Pytest sur tout le code de l'application et calcule la couverture de code.
         run: |
           python -m pytest -v --cov=src
