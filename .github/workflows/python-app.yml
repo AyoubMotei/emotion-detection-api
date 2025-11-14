@@ -1,0 +1,59 @@
+name: Python CI/CD - Tests unitaires et d'intégration
+
+on:
+  # Déclenche le workflow lors de chaque push et pull request sur la branche main
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    # Stratégie de matrice pour tester sur différentes versions de Python (optionnel, mais recommandé)
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip' # Utilise le cache pour accélérer l'installation des dépendances
+    
+    #  Installation des dépendances du projet
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Installe toutes les dépendances listées dans requirement.txt
+        pip install -r requirement.txt
+        # Installe pytest pour exécuter les tests
+        pip install pytest
+
+    # Préparation des dépendances externes pour le ML
+    - name: Setup ML/CV Artifacts
+      run: |
+        # Crée les dossiers si non présents (nécessaire pour le test de modèle)
+        mkdir -p models tests/test_images
+        
+        # Simule l'existence du modèle H5 pour que test_model.py ne fasse pas de skip/fail
+        # Si votre modèle est versionné (non recommandé) ou si vous le construisez à l'étape précédente, ajustez ceci.
+        # Ici, nous téléchargeons un modèle Keras 'bidon' pour que le chargement TF réussisse,
+        # OU vous devrez vous assurer que votre modèle (emotion_model.h5) est commité ou téléchargé.
+        # NOTE IMPORTANTE: J'assume que 'emotion_model.h5' EST dans le repo pour le test de chargement.
+        # Si vous ne voulez PAS le commiter (bonne pratique), vous devez le *mocker* ou le *construire* ici.
+        
+        # Télécharge le fichier Haar Cascade si nécessaire (il est dans .gitignore mais requis par detect_and_predict.py)
+        # J'utilise un lien direct populaire pour le test.
+        if [ ! -f "haarcascade_frontalface_default.xml" ]; then
+          wget https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml
+        fi
+        
+    # 3. Exécution des tests
+    - name: Run Pytest tests
+      run: |
+        # L'utilisation de python -m pytest est recommandée
+        python -m pytest
