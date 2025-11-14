@@ -45,9 +45,6 @@ jobs:
       - name: Préparer fichiers locaux (models / cascades / images)
         run: |
           mkdir -p models tests/test_images
-          # Télécharger le modèle CNN si pas déjà présent
-          if [ ! -f "models/emotion_model.h5" ]; then
-            wget -q -O models/emotion_model.h5 \
           # Télécharger le haarcascade si pas déjà présent 
           if [ ! -f "haarcascade_frontalface_default.xml" ]; then
             wget -q -O haarcascade_frontalface_default.xml \
