@@ -4,10 +4,10 @@ on:
   
   push:
   
-    branches: [ "main" ]
+    branches: [ "master" ]
 
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master" ]
 
 
 jobs:
@@ -16,21 +16,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-            
-            fetch-depth: 0 
 
       
       - name: Installer Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-          cache: 'pip' 
+          python-version: '3.13' 
 
       
-      - name: Installer les dépendances
+      - name: Install dependencies
         run: |
           # Mise à jour de pip
           python -m pip install --upgrade pip
@@ -41,7 +37,7 @@ jobs:
 
       #  Préparer les fichiers de Machine Learning (CV)
       
-      - name: Télécharger le classifieur Haar Cascade
+      - name: Préparer l'environnement (models & test images)
         run: |
           # Crée les dossiers si besoin (pour 'models/' et 'tests/test_images/')
           mkdir -p models tests/test_images
