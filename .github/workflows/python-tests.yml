@@ -1,5 +1,6 @@
 name: CI - Tests Unitaires Simples (FastAPI + ML)
 
+# Quand exécuter le workflow
 on:
   push:
     branches: ["master", "main"]
@@ -10,44 +11,63 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    # Variables d'environnement disponibles pour toutes les étapes du job
     env:
-      # Forcer sqlite en CI pour éviter Postgres
+      # Force SQLite en CI pour éviter d'avoir besoin d'une base Postgres.
       DATABASE_URL: "sqlite:///./test_db.sqlite3"
 
     steps:
+      #  Récupérer le code du dépôt
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      #  Installer Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.13"
 
+      #  afficher versions pour debug rapide
+      - name: Show Python and pip versions
+        run: |
+          python --version
+          pip --version
+
+      # Installer les dépendances
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-
-          pip install -r requirements.txt
-          
-          # httpx requis par fastapi TestClient
+          # Installer le fichier requirements si présent (supporte "requirement.txt" et "requirements.txt")
+          if [ -f "requirement.txt" ]; then
+            pip install -r requirement.txt
+          elif [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          else
+            echo "Aucun fichier requirements trouvé, installation minimale"
+          fi
+          # httpx est nécessaire pour fastapi TestClient (starlette)
           pip install httpx
 
+      #  Préparer dossiers/fichiers locaux utiles aux tests (ex: cascades OpenCV)
       - name: Préparer fichiers locaux (models / cascades / images)
         run: |
-          # Crée les dossiers nécessaires pour les tests
           mkdir -p models tests/test_images
-
-
-          # Télécharger le haarcascade si pas déjà présent (utile pour OpenCV)
+          # Si tu souhaites inclure un modèle pour les tests, ajoute-le dans models/
+          # Télécharger le haarcascade si nécessaire (utile pour des tests OpenCV)
           if [ ! -f "haarcascade_frontalface_default.xml" ]; then
             wget -q -O haarcascade_frontalface_default.xml \
               https://raw.githubusercontent.com/opencv/opencv/4.x/data/haarcascades/haarcascade_frontalface_default.xml || true
           fi
 
+      # S'assurer que Python peut importer le dossier 'src'
       - name: Configure le chemin d'importation pour trouver le dossier 'src'
         run: |
+          # Ajoute les chemins au runtime via GITHUB_ENV pour toutes les étapes suivantes
           echo "PYTHONPATH=$(pwd):$(pwd)/src" >> $GITHUB_ENV
+          # Vérification rapide (optionnel)
+          python -c "import sys; print('PYTHONPATH:', sys.path[:3])"
 
+      #  Lancer les tests
       - name: Run tests
         run: |
           python -m pytest -v
