@@ -1,34 +1,16 @@
-# === Python ===
+# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
+*.pyc
+*.pyo
 venv/
-.venv/
-# pip-log.txt
-
-# === Jupyter ===
 .ipynb_checkpoints/
 
-# === Données & Modèles ===
+# Data & Models
 data/
 models/
 *.h5
+*.xml 
+
+# Database
+.env 
 *.db
-
-# === VS Code / IDE ===
-.vscode/
-.idea/
-
-# === OS ===
-.DS_Store
-Thumbs.db
-
-# === Logs ===
-*.log
-
-
-# === Envs ===
-.env
